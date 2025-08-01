@@ -1,12 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "Digital Wellbeing",
+  "name": "QuietNet",
   "version": "1.0",
   "description": "Tracks time spent on websites and displays it in a simple dashboard.",
   "permissions": [
     "tabs",
     "storage",
-    "idle"
+    "idle",
+    "history"
+  ],
+  "host_permissions": [
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"
