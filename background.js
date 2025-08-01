@@ -42,7 +42,7 @@ function startTimer(domain){
     }
 }
 
-// event listener for tab updates
+// event listeners for tab updates
 
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
     await stopTimer();
@@ -69,4 +69,45 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     }
 });
 
-chrome.windows.onFocusChanged.addLi
+chrome.windows.onFocusChanged.addListener(async (windowId) => {
+    await stopTimer();
+
+    if(windowId !== chrome.windows.WINDOW_ID_NONE){
+        try{
+            const [tab] = await chrome.tabs.query({active :true, windowId : windowId});
+            if(tab){
+                activeTabId = tab.id;
+                const domain = getDomain(tab.url);
+                startTimer(domain);
+            }
+        } catch(e){
+            console.error('Error fetching focused tab:', e);
+        }
+    }
+});
+
+chrome.idle.onStateChanged.addListener(async (newState) => {
+    if(newState === 'active'){
+        try{
+            const [tab] = await chrome.tabs.query({active: true, lastFocusedWindow: true});
+            if(tab){
+                activeTabId = tab.id;
+                const domain = getDomain(tab.url);
+                startTimer(domain);
+            }
+        } catch(e) {
+            console.error('Error fetching active tab on idle state change:', e);
+        }
+    } else {
+        // user is idle or away, stop the timer
+        await stopTimer();
+    }
+});
+
+// Handling tab closure
+chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
+    if(tabId === activeTabId){
+        await stopTimer();
+        activeTabId = null; // Reset active tab ID
+    }
+});

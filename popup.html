@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang = "en">
+<head>
+    <meta charset = "UTF-8">
+    <meta name = "viewport" content = "width=device-width, initial-scale=1.0">
+    <title>QuietNet</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src = "https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class = "Container">
+        <div class="header">
+            <h2>QuietNet</h2>
+        </div>
+        <div class="chart-container">
+            <canvas id="timeChart"></canvas>
+            <div id="totalTime" class="total-time">
+                TODAY
+                <span>0 minutes</span>
+            </div>
+        </div>
+        <div class = "stats">
+            <div class="stat-item">
+                <span id = "unlocksCount" class = "stat-number">...</span>
+                <span class = "stat-label">Visits</span>
+            </div> 
+            <div class="stat-item">
+                <span id="notificationsCount" class = "stat-number">...</span>
+                <span class = "stat-label">Notifications</span>
+            </div>
+            <div class = "stat-item">
+                <span id="notificationsCount" class="stat-number">...</span>
+                <span class = "stat-label">Notifications</span>
+            </div>
+        </div>
+        <div id="websiteList" class="website-list">
+            <!-- Website data will be injected here -->
+        </div>
+    </div>
+    <script src="popup.js"></script>
+</body>
+</html>
