@@ -239,6 +239,102 @@ async function ensureAlarm() {
   if (!existing) chrome.alarms.create('tick', { periodInMinutes: 0.5 });
 }
 
+
+// ---------------------------------------------------------------------------
+// Laser Focus: lock the browser to a single tab for a fixed time.
+// Chrome can't hide tabs, so the chosen tab is moved into its own window,
+// every other window is minimized, and new tabs/windows are shut down
+// until the timer runs out.
+// laser = { tabId, windowId, origWindowId, origIndex, moved, minimized: [{id, state}], until }
+// ---------------------------------------------------------------------------
+async function getLaser() {
+  return (await chrome.storage.local.get('laser')).laser || null;
+}
+
+async function startLaser(tabId, minutes) {
+  if (await getLaser()) await endLaser({ silent: true });
+
+  const tab = await chrome.tabs.get(tabId);
+  const win = await chrome.windows.get(tab.windowId, { populate: true });
+  let windowId = tab.windowId;
+  let moved = false;
+
+  if (win.tabs.length > 1) {
+    const opts = { tabId, focused: true };
+    if (win.state === 'maximized' || win.state === 'fullscreen') opts.state = win.state;
+    else Object.assign(opts, { left: win.left, top: win.top, width: win.width, height: win.height });
+    windowId = (await chrome.windows.create(opts)).id;
+    moved = true;
+  }
+
+  const others = (await chrome.windows.getAll({ windowTypes: ['normal'] }))
+    .filter(w => w.id !== windowId && w.state !== 'minimized');
+  for (const w of others) {
+    await chrome.windows.update(w.id, { state: 'minimized' }).catch(() => {});
+  }
+
+  const until = Date.now() + minutes * 60 * 1000;
+  await chrome.storage.local.set({
+    laser: {
+      tabId, windowId, until, moved,
+      origWindowId: tab.windowId,
+      origIndex: tab.index,
+      minimized: others.map(w => ({ id: w.id, state: w.state }))
+    }
+  });
+  await chrome.windows.update(windowId, { focused: true }).catch(() => {});
+  chrome.alarms.create('laser-end', { when: until });
+  await updateLaserBadge();
+}
+
+async function endLaser({ silent = false } = {}) {
+  const laser = await getLaser();
+  if (!laser) return;
+  // Clear state first so the restore below isn't fought by the enforcers.
+  await chrome.storage.local.remove('laser');
+  chrome.alarms.clear('laser-end');
+  chrome.action.setBadgeText({ text: '' });
+
+  if (laser.moved) {
+    try {
+      await chrome.windows.get(laser.origWindowId);
+      await chrome.tabs.move(laser.tabId, { windowId: laser.origWindowId, index: laser.origIndex });
+      await chrome.tabs.update(laser.tabId, { active: true });
+    } catch {
+      // original window or tab is gone; leave things where they are
+    }
+  }
+  for (const w of laser.minimized || []) {
+    await chrome.windows.update(w.id, { state: w.state || 'normal' }).catch(() => {});
+  }
+  const focusId = laser.moved ? laser.origWindowId : laser.windowId;
+  await chrome.windows.update(focusId, { focused: true }).catch(() => {});
+
+  if (!silent) notify('laser-done', 'Laser Focus complete', 'Great session! Your other tabs are back.');
+}
+
+async function updateLaserBadge() {
+  const laser = await getLaser();
+  if (!laser) return;
+  const left = Math.max(0, Math.ceil((laser.until - Date.now()) / 60000));
+  chrome.action.setBadgeBackgroundColor({ color: '#d93025' });
+  chrome.action.setBadgeText({ text: left + 'm' });
+}
+
+async function laserTick() {
+  const laser = await getLaser();
+  if (!laser) return;
+  if (laser.until <= Date.now()) await endLaser();
+  else await updateLaserBadge();
+}
+
+let laserNoticeShown = 0;
+function laserNotice() {
+  if (Date.now() - laserNoticeShown < 60000) return;
+  laserNoticeShown = Date.now();
+  notify('laser-block', 'Laser Focus is on', 'Other tabs are paused until your session ends.');
+}
+
 async function init() {
   await ensureAlarm();
   const settings = await getSettings();
@@ -246,6 +342,8 @@ async function init() {
   await pruneOldDays();
   await applyDnd(settings.dnd);
   if (settings.mute) await applyMute(true);
+  // Window/tab ids don't survive a browser restart or extension reload.
+  if (await getLaser()) await endLaser({ silent: true });
   await refresh();
 }
 
@@ -257,8 +355,13 @@ chrome.runtime.onStartup.addListener(() => serial(init));
 ensureAlarm();
 
 chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === 'laser-end') {
+    serial(() => endLaser());
+    return;
+  }
   if (alarm.name !== 'tick') return;
   serial(async () => {
+    await laserTick();
     await expireFocus();
     await refresh();
     await enforceAll();
@@ -267,8 +370,23 @@ chrome.alarms.onAlarm.addListener(alarm => {
 });
 
 chrome.tabs.onActivated.addListener(() => serial(refresh));
-chrome.tabs.onRemoved.addListener(() => serial(refresh));
-chrome.windows.onFocusChanged.addListener(() => serial(refresh));
+chrome.tabs.onRemoved.addListener(async tabId => {
+  serial(refresh);
+  const laser = await getLaser();
+  if (laser && laser.tabId === tabId) serial(() => endLaser());
+});
+
+chrome.windows.onFocusChanged.addListener(async windowId => {
+  serial(refresh);
+  if (windowId === chrome.windows.WINDOW_ID_NONE) return;
+  const laser = await getLaser();
+  if (!laser || windowId === laser.windowId) return;
+  const win = await chrome.windows.get(windowId).catch(() => null);
+  if (!win || win.type !== 'normal') return; // leave DevTools etc. alone
+  await chrome.windows.update(windowId, { state: 'minimized' }).catch(() => {});
+  await chrome.windows.update(laser.windowId, { focused: true }).catch(() => {});
+  laserNotice();
+});
 chrome.idle.onStateChanged.addListener(() => serial(refresh));
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -283,6 +401,12 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 chrome.tabs.onCreated.addListener(async tab => {
+  const laser = await getLaser();
+  if (laser && tab.id !== laser.tabId) {
+    chrome.tabs.remove(tab.id).catch(() => {});
+    laserNotice();
+    return;
+  }
   const settings = await getSettings();
   if (settings.mute) chrome.tabs.update(tab.id, { muted: true }).catch(() => {});
 });
@@ -308,6 +432,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       snooze[msg.domain] = Date.now() + (msg.minutes || 5) * 60 * 1000;
       await chrome.storage.local.set({ snooze });
     }).then(() => sendResponse({ ok: true }));
+    return true;
+  }
+  if (msg?.type === 'laserStart' && msg.tabId && msg.minutes > 0) {
+    serial(() => startLaser(msg.tabId, Math.min(480, msg.minutes)))
+      .then(() => sendResponse({ ok: true }), e => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
+  if (msg?.type === 'laserEnd') {
+    serial(() => endLaser({ silent: true })).then(() => sendResponse({ ok: true }));
     return true;
   }
   return false;

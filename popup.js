@@ -15,7 +15,8 @@ const state = {
   range: 'today',
   chartMode: 'donut',
   data: { sites: [], total: 0, visits: 0, blocked: 0, days: {} },
-  today: emptyDay()
+  today: emptyDay(),
+  laser: null
 };
 
 const $ = sel => document.querySelector(sel);
@@ -91,9 +92,10 @@ async function loadData() {
   const dates = rangeDates(state.range);
   const keys = dates.map(d => dayKey(d));
   const todayKey = dayKey();
-  const stored = await chrome.storage.local.get([...new Set([...keys, todayKey, 'settings'])]);
+  const stored = await chrome.storage.local.get([...new Set([...keys, todayKey, 'settings', 'laser'])]);
 
   state.settings = mergeSettings(stored.settings);
+  state.laser = stored.laser || null;
   state.today = stored[todayKey] || emptyDay();
 
   const sites = {};
@@ -129,6 +131,7 @@ async function refreshAll() {
   // Don't yank the chart / lists out from under the user while they interact.
   if (!$('#chart').matches(':hover')) renderChart();
   renderTiles();
+  renderLaser();
   if (!$('#view-limits').contains(document.activeElement)) renderLimits();
   renderSettings();
 }
@@ -327,13 +330,56 @@ function renderTiles() {
   } else if (focusOn) {
     $('#focusSub').textContent = 'Tap to stop';
   } else {
-    $('#focusSub').textContent = s.focus.minutes ? `Block distractions for ${s.focus.minutes} min` : 'Blocks distracting sites';
+    $('#focusSub').textContent = s.focus.minutes ? `Blocks sites for ${s.focus.minutes} min` : 'Blocks distracting sites';
   }
 
   setTile('#tileDnd', s.dnd);
   setTile('#tileMute', s.mute);
   setTile('#tileHeadsUp', s.headsUp.on);
   $('#headsUpSub').textContent = `Break nudge every ${s.headsUp.minutes} min`;
+}
+
+// ---------------------------------------------------------------------------
+// Laser Focus
+// ---------------------------------------------------------------------------
+function renderLaser() {
+  const laser = state.laser;
+  const active = !!(laser && laser.until > Date.now());
+  const tile = $('#tileLaser');
+  tile.classList.toggle('on', active);
+  $('#laserForm').hidden = active;
+  $('#laserActive').hidden = !active;
+  if (active) {
+    const left = Math.max(0, Math.round((laser.until - Date.now()) / 1000));
+    const h = Math.floor(left / 3600);
+    const m = Math.floor((left % 3600) / 60);
+    const sec = String(left % 60).padStart(2, '0');
+    $('#laserTime').textContent = h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+    $('#laserSub').textContent = 'Other tabs are hidden';
+  } else {
+    $('#laserSub').textContent = 'Hide all other tabs';
+  }
+}
+
+async function startLaser(e) {
+  e.preventDefault();
+  const minutes = Math.round(Number($('#laserMinutes').value));
+  if (!minutes || minutes < 1 || minutes > 480) {
+    toast('Enter between 1 and 480 minutes');
+    return;
+  }
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || tab.url?.startsWith(chrome.runtime.getURL(''))) {
+    toast('Go to the tab you want, then start Laser Focus from the toolbar icon');
+    return;
+  }
+  try { localStorage.setItem('qn-laser-min', String(minutes)); } catch {}
+  const res = await chrome.runtime.sendMessage({ type: 'laserStart', tabId: tab.id, minutes });
+  if (res && res.ok === false) {
+    toast("Couldn't start Laser Focus");
+    return;
+  }
+  window.close();
 }
 
 async function toggle(name) {
@@ -703,12 +749,21 @@ function wire() {
   });
   setInterval(() => chrome.runtime.sendMessage({ type: 'flush' }).catch(() => {}), 10000);
   setInterval(renderTiles, 15000);
+  setInterval(renderLaser, 1000);
+
+  $('#laserForm').addEventListener('submit', startLaser);
+  armConfirm($('#laserEnd'), 'End early', async () => {
+    await chrome.runtime.sendMessage({ type: 'laserEnd' });
+    toast('Laser Focus ended');
+  });
 }
 
 (async function main() {
   try {
     const t = localStorage.getItem('qn-theme');
     if (t) document.documentElement.dataset.theme = t;
+    const lm = localStorage.getItem('qn-laser-min');
+    if (lm) $('#laserMinutes').value = lm;
     const mode = localStorage.getItem('qn-chart');
     if (mode === 'bars' || mode === 'donut') {
       state.chartMode = mode;

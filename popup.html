@@ -5,7 +5,8 @@
   <title>QuietNet</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="app preload">
+<body class="popup preload">
+  <div class="app">
   <!-- ============ Side rail ============ -->
   <aside class="rail">
     <div class="logo" title="QuietNet">
@@ -110,6 +111,24 @@
             </span>
             <span class="tile-big" id="bedtimeRange">From 11:00 PM to 6:00 AM</span>
           </button>
+          <div class="tile tile-laser" id="tileLaser">
+            <div class="laser-info">
+              <span class="laser-title">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" class="dot"/></svg>
+                Laser Focus
+              </span>
+              <span class="laser-sub" id="laserSub">Hide all other tabs</span>
+            </div>
+            <form class="laser-form" id="laserForm">
+              <input type="number" id="laserMinutes" min="1" max="480" value="25" aria-label="Laser Focus minutes">
+              <span class="laser-unit">min</span>
+              <button class="btn btn-primary" type="submit">Start</button>
+            </form>
+            <div class="laser-active" id="laserActive" hidden>
+              <span class="laser-time" id="laserTime">25:00</span>
+              <button class="btn btn-outline" id="laserEnd" type="button">End early</button>
+            </div>
+          </div>
           <div class="tiles">
             <button class="tile" id="tileFocus">
               <span class="tile-label">Focus Mode</span>
@@ -232,6 +251,8 @@
         </div>
       </div>
     </section>
+  </div>
+
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
