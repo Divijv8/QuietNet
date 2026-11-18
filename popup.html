@@ -1,42 +1,242 @@
 <!DOCTYPE html>
-<html lang = "en">
+<html lang="en" data-theme="light">
 <head>
-    <meta charset = "UTF-8">
-    <meta name = "viewport" content = "width=device-width, initial-scale=1.0">
-    <title>QuietNet</title>
-    <link rel="stylesheet" href="styles.css">
-    <script src = "https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta charset="UTF-8">
+  <title>QuietNet</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-<body>
-    <div class = "Container">
-        <div class="header">
-            <h2>QuietNet</h2>
-        </div>
-        <div class="chart-container">
-            <canvas id="timeChart"></canvas>
-            <div id="totalTime" class="total-time">
-                TODAY
-                <span>0 minutes</span>
-            </div>
-        </div>
-        <div class = "stats">
-            <div class="stat-item">
-                <span id = "unlocksCount" class = "stat-number">...</span>
-                <span class = "stat-label">Visits</span>
-            </div> 
-            <div class="stat-item">
-                <span id="notificationsCount" class = "stat-number">...</span>
-                <span class = "stat-label">Notifications</span>
-            </div>
-            <div class = "stat-item">
-                <span id="notificationsCount" class="stat-number">...</span>
-                <span class = "stat-label">Notifications</span>
-            </div>
-        </div>
-        <div id="websiteList" class="website-list">
-            <!-- Website data will be injected here -->
-        </div>
+<body class="app preload">
+  <!-- ============ Side rail ============ -->
+  <aside class="rail">
+    <div class="logo" title="QuietNet">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="14" fill="var(--logo-bg)"/>
+        <path d="M19.5 8.5a8 8 0 1 0 4 14.6A9 9 0 0 1 19.5 8.5Z" fill="var(--logo-moon)"/>
+        <circle cx="11" cy="11" r="1.6" fill="var(--logo-star)"/>
+      </svg>
     </div>
-    <script src="popup.js"></script>
+    <nav class="rail-nav">
+      <button class="rail-btn active" data-view="dashboard" title="Dashboard" aria-label="Dashboard">
+        <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M4 11h16M12 4v7"/></svg>
+      </button>
+      <button class="rail-btn" data-view="limits" title="Site limits" aria-label="Site limits">
+        <svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.8"/><path d="M16.75 4v6.5M13.5 7.25H20"/></svg>
+      </button>
+      <button class="rail-btn" data-view="settings" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+      </button>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <!-- ============ Top bar ============ -->
+    <header class="topbar">
+      <div class="search">
+        <input id="search" type="search" placeholder="Search sites" autocomplete="off" spellcheck="false">
+        <svg viewBox="0 0 24 24" class="search-icon"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+        <div id="searchResults" class="search-results" hidden></div>
+      </div>
+      <div class="topbar-right">
+        <button id="themeToggle" class="theme-toggle" title="Switch theme">
+          <span id="themeLabel">Light</span>
+          <span class="theme-knob">
+            <svg viewBox="0 0 24 24"><path d="M9 7v10M12 7v10M15 7v10"/></svg>
+          </span>
+        </button>
+        <button id="openTab" class="icon-btn" title="Open dashboard in a tab" aria-label="Open dashboard in a tab">
+          <svg viewBox="0 0 24 24" class="dots"><circle cx="6" cy="6" r="1.6"/><circle cx="12" cy="6" r="1.6"/><circle cx="18" cy="6" r="1.6"/><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/><circle cx="6" cy="18" r="1.6"/><circle cx="12" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ============ Dashboard ============ -->
+    <section class="view active" id="view-dashboard">
+      <div class="title-row">
+        <h1>Dashboard</h1>
+        <div class="title-actions">
+          <div class="range">
+            <button id="rangeBtn" class="btn btn-outline">
+              <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/></svg>
+              <span id="rangeLabel">Today</span>
+            </button>
+            <div id="rangeMenu" class="menu" hidden>
+              <button data-range="today">Today</button>
+              <button data-range="yesterday">Yesterday</button>
+              <button data-range="week">Last 7 days</button>
+              <button data-range="month">Last 30 days</button>
+            </div>
+          </div>
+          <button id="exportBtn" class="btn btn-primary">Export</button>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat-card" title="Times you opened or switched to a site">
+          <span class="stat-label">Visits</span>
+          <span class="stat-value" id="statVisits">0</span>
+        </div>
+        <div class="stat-card" title="Different websites you used">
+          <span class="stat-label">Sites Visited</span>
+          <span class="stat-value" id="statSites">0</span>
+        </div>
+        <div class="stat-card" title="Times QuietNet stopped a distracting site">
+          <span class="stat-label">Blocked</span>
+          <span class="stat-value" id="statBlocked">0</span>
+        </div>
+        <button class="stat-card clickable" id="statLimitsCard" title="Manage site limits">
+          <span class="stat-label">Site Limits</span>
+          <span class="stat-value" id="statLimits">0</span>
+        </button>
+      </div>
+
+      <div class="dash-grid">
+        <div class="card chart-card">
+          <div id="chart" class="chart"></div>
+          <div class="chart-toggle" role="group" aria-label="Chart type">
+            <button data-mode="donut" class="active" title="Ring chart" aria-label="Ring chart">
+              <svg viewBox="0 0 24 24" class="fill"><path d="M11 3.05A9 9 0 1 0 20.95 13H11V3.05Z"/><path d="M13 3.05V11h7.95A9 9 0 0 0 13 3.05Z"/></svg>
+            </button>
+            <button data-mode="bars" title="List" aria-label="List">
+              <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8.5 16v-4M12 16V8.5M15.5 16v-6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="controls">
+          <button class="tile tile-wide" id="tileBedtime">
+            <span class="tile-head">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+              <span id="bedtimeTitle">Bedtime Mode OFF</span>
+            </span>
+            <span class="tile-big" id="bedtimeRange">From 11:00 PM to 6:00 AM</span>
+          </button>
+          <div class="tiles">
+            <button class="tile" id="tileFocus">
+              <span class="tile-label">Focus Mode</span>
+              <span class="tile-state">OFF</span>
+              <span class="tile-sub" id="focusSub">Blocks distracting sites</span>
+            </button>
+            <button class="tile" id="tileDnd">
+              <span class="tile-label">Do Not Disturb</span>
+              <span class="tile-state">OFF</span>
+              <span class="tile-sub">Silences site notifications</span>
+            </button>
+            <button class="tile" id="tileMute">
+              <span class="tile-label">Hush Tabs</span>
+              <span class="tile-state">OFF</span>
+              <span class="tile-sub">Mutes every tab</span>
+            </button>
+            <button class="tile" id="tileHeadsUp">
+              <span class="tile-label">Heads Up</span>
+              <span class="tile-state">OFF</span>
+              <span class="tile-sub" id="headsUpSub">Break nudge every 45 min</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Site limits ============ -->
+    <section class="view" id="view-limits">
+      <div class="title-row">
+        <h1>Site Limits</h1>
+      </div>
+      <div class="limits-grid">
+        <div class="card panel">
+          <div class="panel-head">
+            <h2>Daily limits</h2>
+            <p>When you reach a limit, the site is blocked for the rest of the day.</p>
+          </div>
+          <form class="add-row" id="addLimitForm">
+            <input id="limitDomain" placeholder="e.g. youtube.com" autocomplete="off" spellcheck="false">
+            <select id="limitMinutes"></select>
+            <button class="btn btn-primary" type="submit">Add</button>
+          </form>
+          <div id="limitList" class="limit-list"></div>
+        </div>
+
+        <div class="card panel">
+          <div class="panel-head">
+            <h2>Distracting sites</h2>
+            <p>Blocked while Focus Mode or Bedtime Mode is on.</p>
+          </div>
+          <form class="add-row" id="addDistractForm">
+            <input id="distractDomain" placeholder="Add a site" autocomplete="off" spellcheck="false">
+            <button class="btn btn-primary" type="submit">Add</button>
+          </form>
+          <div id="distractList" class="chips"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Settings ============ -->
+    <section class="view" id="view-settings">
+      <div class="title-row">
+        <h1>Settings</h1>
+      </div>
+      <div class="settings-grid">
+        <div class="card panel">
+          <div class="setting-row">
+            <div>
+              <h2>Bedtime Mode</h2>
+              <p>Blocks distracting sites during these hours.</p>
+            </div>
+            <label class="switch"><input type="checkbox" id="setBedtimeOn"><span></span></label>
+          </div>
+          <div class="time-row">
+            <label>From <input type="time" id="setBedStart"></label>
+            <label>To <input type="time" id="setBedEnd"></label>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <div class="setting-row">
+            <div>
+              <h2>Focus session length</h2>
+              <p>How long Focus Mode stays on.</p>
+            </div>
+            <select id="setFocusMinutes">
+              <option value="15">15 min</option>
+              <option value="25">25 min</option>
+              <option value="50">50 min</option>
+              <option value="90">90 min</option>
+              <option value="0">Until I turn it off</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <div>
+              <h2>Heads Up interval</h2>
+              <p>Remind me to take a break after…</p>
+            </div>
+            <select id="setHeadsUpMinutes">
+              <option value="20">20 min</option>
+              <option value="30">30 min</option>
+              <option value="45">45 min</option>
+              <option value="60">1 hour</option>
+              <option value="90">90 min</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <div class="setting-row">
+            <div>
+              <h2>Your data</h2>
+              <p>Everything stays on this computer. The last 30 days are kept.</p>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-outline" id="clearToday">Clear today</button>
+            <button class="btn btn-danger" id="clearAll">Clear all data</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="shared.js"></script>
+  <script src="popup.js"></script>
 </body>
 </html>

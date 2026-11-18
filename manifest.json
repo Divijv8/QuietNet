@@ -1,22 +1,23 @@
 {
   "manifest_version": 3,
-  "name": "QuietNet",
-  "version": "1.0",
-  "description": "Tracks time spent on websites and displays it in a simple dashboard.",
+  "name": "QuietNet – Digital Wellbeing",
+  "version": "2.0.0",
+  "description": "See where your time goes online, set daily site limits, and use Focus, Bedtime, Do Not Disturb and break reminders.",
   "permissions": [
     "tabs",
     "storage",
     "idle",
-    "history"
-  ],
-  "host_permissions": [
-    "<all_urls>"
+    "alarms",
+    "notifications",
+    "contentSettings",
+    "favicon"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
     "default_popup": "popup.html",
+    "default_title": "QuietNet",
     "default_icon": {
       "16": "images/icon16.png",
       "48": "images/icon48.png",
