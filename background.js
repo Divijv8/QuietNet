@@ -5,8 +5,23 @@ importScripts('shared.js');
 // overlapping Chrome events can't overwrite each other's changes.
 // ---------------------------------------------------------------------------
 let queue = Promise.resolve();
+
+// Right after install/reload Chrome can reject extension API calls with
+// "No SW" while the worker registration is still settling. It's transient,
+// so retry a few times with a short backoff instead of dropping the task.
+async function withRetry(fn, tries = 4) {
+  for (let i = 0; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i >= tries - 1 || !/No SW/i.test(String(err?.message || err))) throw err;
+      await new Promise(r => setTimeout(r, 250 * 2 ** i));
+    }
+  }
+}
+
 function serial(fn) {
-  const run = queue.then(fn);
+  const run = queue.then(() => withRetry(fn));
   queue = run.catch(err => console.error('[QuietNet]', err));
   return run;
 }
@@ -352,7 +367,7 @@ async function init() {
 // ---------------------------------------------------------------------------
 chrome.runtime.onInstalled.addListener(() => serial(init));
 chrome.runtime.onStartup.addListener(() => serial(init));
-ensureAlarm();
+serial(ensureAlarm);
 
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === 'laser-end') {
